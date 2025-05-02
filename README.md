@@ -2,6 +2,23 @@
 
 Experimental shell for learning purposes only. Goal is to implement as much of [POSIX sh](https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html) as I can until I'm no longer interested in the project.
 
+## Install
+
+```sh
+git clone --recursive https://github.com/mharrisb1/tinyshell.git
+cd tinyshell
+make
+make install
+tiny
+```
+
+## Uninstall
+
+```sh
+make uninstall
+make clean
+```
+
 ## Usage
 
 ```
@@ -15,12 +32,17 @@ $ tiny
 >
 ```
 
+The line editor used is [partyline](https://github.com/mharrisb1/partyline). See the documentation in that repo for keybindings.
+
 ## Architecture
 
 ```mermaid
 flowchart TD
 
     subgraph repl
+        subgraph line_editor
+            partyline
+        end
         subgraph interpreter
             scanner
             parser
@@ -29,6 +51,11 @@ flowchart TD
 ```
 
 ## Progress
+
+### 2025-05-02
+
+- Integrated my own custom line editor, [partyline](https://github.com/mharrisb1/partyline)
+- Circling back to the parser for the interpreter implementation
 
 ### 2025-04-21
 
