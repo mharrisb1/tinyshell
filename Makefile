@@ -1,17 +1,18 @@
-CC := cc
-CFLAGS := -Wall -Wextra -std=c2x -Iinclude
+CC       := cc
+CFLAGS   := -Wall -Wextra -std=c2x -Iinclude -Ivendor
 
-SRC_DIR := src
-BUILD_DIR := build
+SRC_DIR    := src
+VENDOR_DIR := vendor
+BUILD_DIR  := build
 
-SRCS := $(shell find $(SRC_DIR) -type f -name '*.c')
-OBJS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
+SRCS := $(shell find $(SRC_DIR) $(VENDOR_DIR) -type f -name '*.c' -not -name 'example.c')
+OBJS := $(SRCS:%.c=$(BUILD_DIR)/%.o)
 
 TARGET := $(BUILD_DIR)/tiny
 
 PREFIX ?= /usr/local
-BINDIR := $(PREFIX)/bin
-INSTALL := install
+BINDIR   := $(PREFIX)/bin
+INSTALL  := install
 
 .PHONY: all clean install uninstall
 
@@ -22,7 +23,7 @@ $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 	@echo "Built $@"
 
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+$(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 	@echo "Compiled: $< -> $@"
@@ -38,6 +39,5 @@ uninstall:
 	@echo "Removed $(DESTDIR)$(BINDIR)/tiny"
 
 clean:
-
-	@$(RM) -r $(BUILD_DIR)
+	@rm -rf $(BUILD_DIR)
 	@echo "Cleaned build artifacts."

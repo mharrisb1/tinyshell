@@ -1,0 +1,3 @@
+[submodule "vendor/partyline"]
+	path = vendor/partyline
+	url = git@github.com:mharrisb1/partyline.git

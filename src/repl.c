@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <partyline/partyline.h>
+
 #include "allocators/arena.h"
 #include "interpreter/scanner.h"
 #include "repl.h"
@@ -15,22 +17,17 @@ static const char GREETING[] = TEXT_GREEN("  _____     ____     ______\n"
                                           "|_|_| |_|_|\n\n");
 
 void repl_run(arena_t *arena) {
-  char  *line = NULL;
-  size_t len  = 0;
+  char *line;
 
   printf("%s", GREETING);
-  while (printf(TEXT_GREEN("> ")), fflush(stdout),
-         getline(&line, &len, stdin) != -1) {
+  while ((line = partyline(TEXT_GREEN("> "))) != NULL) {
     arena_reset(arena);
 
     scanner_t scanner;
     scanner_init(&scanner, line, arena);
 
     token_t *tok;
-    while ((tok = next_token(&scanner)) != NULL) {
-      token_print(tok);
-    }
+    while ((tok = next_token(&scanner)) != NULL) { token_print(tok); }
+    free(line);
   }
-
-  free(line);
 }

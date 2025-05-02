@@ -1,4 +1,5 @@
 -Iinclude
+-Ivendor
 -Wall
 -Wextra
 -std=c11
