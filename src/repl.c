@@ -5,6 +5,8 @@
 #include <partyline/partyline.h>
 
 #include "allocators/arena.h"
+#include "interpreter/ast.h"
+#include "interpreter/parser.h"
 #include "interpreter/scanner.h"
 #include "repl.h"
 
@@ -26,8 +28,11 @@ void repl_run(arena_t *arena) {
     scanner_t scanner;
     scanner_init(&scanner, line, arena);
 
-    token_t *tok;
-    while ((tok = next_token(&scanner)) != NULL) { token_print(tok); }
+    parser_t parser;
+    parser_init(&parser, scanner, arena);
+
+    ast_node_t *root = parser_parse(&parser);
+    if (!parser.had_error) ast_dump(root);
     free(line);
   }
 }
