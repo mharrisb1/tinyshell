@@ -15,7 +15,7 @@ typedef struct {
   bool       had_error;
 } parser_t;
 
-void        parser_init(parser_t *parser, scanner_t scanner, arena_t *arena);
+void        parser_init(parser_t *parser, scanner_t *scanner, arena_t *arena);
 ast_node_t *parser_parse(parser_t *parser);
 void        parser_error(parser_t *parser, const char *message);
 void        parser_synchronize(parser_t *parser);

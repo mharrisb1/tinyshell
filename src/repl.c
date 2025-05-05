@@ -29,7 +29,7 @@ void repl_run(arena_t *arena) {
     scanner_init(&scanner, line, arena);
 
     parser_t parser;
-    parser_init(&parser, scanner, arena);
+    parser_init(&parser, &scanner, arena);
 
     ast_node_t *root = parser_parse(&parser);
     if (!parser.had_error) ast_dump(root);
