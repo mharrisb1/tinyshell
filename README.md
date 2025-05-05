@@ -9,6 +9,11 @@ git clone --recursive https://github.com/mharrisb1/tinyshell.git
 cd tinyshell
 make
 make install
+```
+
+In a new terminal session/window initialize the shell with `tiny` command:
+
+```sh
 tiny
 ```
 
