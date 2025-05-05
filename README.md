@@ -52,6 +52,10 @@ flowchart TD
 
 ## Progress
 
+### 2025-05-05
+
+- First pass implementation of the parser
+
 ### 2025-05-02
 
 - Integrated my own custom line editor, [partyline](https://github.com/mharrisb1/partyline)
