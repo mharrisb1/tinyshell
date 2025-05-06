@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "allocators/arena.h"
+#include "collections/vector.h"
 #include "interpreter/ast.h"
 #include "interpreter/parser.h"
 #include "interpreter/scanner.h"
@@ -15,6 +16,7 @@ static ast_node_t      *parse_and_or(parser_t *parser);
 static ast_node_t      *parse_pipeline(parser_t *parser);
 static ast_node_t      *parse_command(parser_t *parser);
 static ast_node_t      *parse_simple(parser_t *parser);
+static bool             is_redir_tok(token_type_t t);
 static ast_redir_type_t map_token_to_redir_type(token_type_t op);
 
 void parser_init(parser_t *parser, scanner_t *scanner, arena_t *arena) {
@@ -41,8 +43,8 @@ void parser_error(parser_t *parser, const char *message) {
   token_t *blame = parser->cur ? parser->cur : parser->prev;
   fprintf(stderr, "tiny: %s\n", message);
   if (blame) {
-    fprintf(stderr, "Syntax error at line %u, column %u (near '%s')", blame->row,
-            blame->column, blame->lexeme);
+    fprintf(stderr, "Syntax error at line %u, column %u (near '%s')\n",
+            blame->row, blame->column, blame->lexeme);
   }
   parser->had_error = true;
   parser_synchronize(parser);
@@ -101,7 +103,11 @@ static ast_node_t *parse_list(parser_t *parser) {
   while (match(parser, TOK_SEMI) || match(parser, TOK_NEWLINE)) {
     ast_node_t *right = parse_and_or(parser);
 
-    ast_node_t *seq     = arena_alloc(parser->arena, sizeof(ast_node_t));
+    ast_node_t *seq = arena_alloc(parser->arena, sizeof(ast_node_t));
+    if (!seq) {
+      parser_error(parser, "Out of memory (parse_list)");
+      return NULL;
+    }
     seq->type           = AST_SEQUENCE;
     seq->u.binary.left  = left;
     seq->u.binary.right = right;
@@ -118,7 +124,11 @@ static ast_node_t *parse_and_or(parser_t *parser) {
     if (match(parser, TOK_AND_IF)) {
       ast_node_t *right = parse_pipeline(parser);
 
-      ast_node_t *node     = arena_alloc(parser->arena, sizeof(ast_node_t));
+      ast_node_t *node = arena_alloc(parser->arena, sizeof(ast_node_t));
+      if (!node) {
+        parser_error(parser, "Out of memory (parse_and_or)");
+        return NULL;
+      }
       node->type           = AST_AND;
       node->u.binary.left  = left;
       node->u.binary.right = right;
@@ -128,7 +138,11 @@ static ast_node_t *parse_and_or(parser_t *parser) {
     } else if (match(parser, TOK_OR_IF)) {
       ast_node_t *right = parse_pipeline(parser);
 
-      ast_node_t *node     = arena_alloc(parser->arena, sizeof(ast_node_t));
+      ast_node_t *node = arena_alloc(parser->arena, sizeof(ast_node_t));
+      if (!node) {
+        parser_error(parser, "Out of memory (parser_and_or)");
+        return NULL;
+      }
       node->type           = AST_OR;
       node->u.binary.left  = left;
       node->u.binary.right = right;
@@ -148,28 +162,22 @@ static ast_node_t *parse_pipeline(parser_t *parser) {
 
   if (!match(parser, TOK_PIPE)) return first;
 
-  size_t       capacity = 4;
-  ast_node_t **stages =
-      arena_alloc(parser->arena, capacity * sizeof(ast_node_t *));
-  size_t n_stages = 0;
+  vector_t stages;
+  vector_init(&stages, sizeof(ast_node_t *), parser->arena);
+  vector_push(&stages, &first);
 
   do {
     ast_node_t *next_stage = parse_command(parser);
-    if (n_stages == capacity) {
-      size_t       new_capacity = capacity * 2;
-      ast_node_t **bigger =
-          arena_alloc(parser->arena, new_capacity * sizeof(ast_node_t *));
-      memcpy(bigger, stages, capacity);
-      stages   = bigger;
-      capacity = new_capacity;
-    }
-    stages[n_stages++] = next_stage;
+    vector_push(&stages, next_stage);
   } while (match(parser, TOK_PIPE));
 
-  ast_node_t *pipe_node        = arena_alloc(parser->arena, sizeof(ast_node_t));
+  ast_node_t *pipe_node = arena_alloc(parser->arena, sizeof(ast_node_t));
+  if (!pipe_node) {
+    parser_error(parser, "Out of memory (parse_pipeline)");
+    return NULL;
+  }
   pipe_node->type              = AST_PIPELINE;
   pipe_node->u.pipeline.stages = stages;
-  pipe_node->u.pipeline.n_stages = n_stages;
 
   return pipe_node;
 }
@@ -178,7 +186,11 @@ static ast_node_t *parse_command(parser_t *parser) {
   if (match(parser, TOK_L_PAREN)) {
     ast_node_t *child = parse_list(parser);
     consume(parser, TOK_R_PAREN, "Expect ')' after subshell");
-    ast_node_t *subshell       = arena_alloc(parser->arena, sizeof(ast_node_t));
+    ast_node_t *subshell = arena_alloc(parser->arena, sizeof(ast_node_t));
+    if (!subshell) {
+      parser_error(parser, "Out of memory (parse_command)");
+      return NULL;
+    }
     subshell->type             = AST_SUBSHELL;
     subshell->u.subshell.child = child;
     return subshell;
@@ -188,14 +200,23 @@ static ast_node_t *parse_command(parser_t *parser) {
 }
 
 static ast_node_t *parse_simple(parser_t *parser) {
-  ast_node_t *node         = arena_alloc(parser->arena, sizeof(ast_node_t));
-  node->type               = AST_SIMPLE;
-  node->u.simple.assigns   = NULL;
-  node->u.simple.n_assigns = 0;
-  node->u.simple.args      = NULL;
-  node->u.simple.n_args    = 0;
-  node->u.simple.redirs    = NULL;
-  node->u.simple.n_redirs  = 0;
+  vector_t assigns;
+  vector_t args;
+  vector_t redirs;
+
+  vector_init(&assigns, sizeof(ast_assignment_t), parser->arena);
+  vector_init(&args, sizeof(char *), parser->arena);
+  vector_init(&redirs, sizeof(ast_redir_t), parser->arena);
+
+  ast_node_t *node = arena_alloc(parser->arena, sizeof(ast_node_t));
+  if (!node) {
+    parser_error(parser, "Out of memory (parse_simple)");
+    return NULL;
+  }
+  node->type             = AST_SIMPLE;
+  node->u.simple.assigns = assigns;
+  node->u.simple.args    = args;
+  node->u.simple.redirs  = redirs;
 
   while (match(parser, TOK_ASSIGNMENT_WORD)) {
     token_t *tok = parser->prev;
@@ -207,55 +228,23 @@ static ast_node_t *parse_simple(parser_t *parser) {
     char *value = eq + 1;
 
     ast_assignment_t assign;
-    assign.name                 = name;
-    assign.value                = value;
-    size_t            n_assigns = node->u.simple.n_assigns;
-    size_t            capacity  = n_assigns + 1;
-    ast_assignment_t *buf =
-        arena_alloc(parser->arena, capacity * sizeof(ast_assignment_t *));
-    if (!buf) {
-      parser_error(parser, "Out of memory (allocation of assignments)");
-      return node;
-    }
-    if (node->u.simple.assigns)
-      memcpy(buf, node->u.simple.assigns, n_assigns * sizeof(ast_assignment_t));
-    buf[n_assigns]           = assign;
-    node->u.simple.assigns   = buf;
-    node->u.simple.n_assigns = capacity;
+    assign.name  = name;
+    assign.value = value;
+    vector_push(&node->u.simple.assigns, &assign);
   }
 
-  if (match(parser, TOK_WORD)) {
-    char **args           = arena_alloc(parser->arena, sizeof(char *));
-    args[0]               = parser->prev->lexeme;
-    node->u.simple.args   = args;
-    node->u.simple.n_args = 1;
+  while (match(parser, TOK_WORD))
+    vector_push(&node->u.simple.args, &parser->prev->lexeme);
 
-    while (match(parser, TOK_WORD)) {
-      size_t n_args   = node->u.simple.n_args;
-      size_t capacity = n_args + 1;
-      char **buf      = arena_alloc(parser->arena, capacity * sizeof(char *));
-      if (!buf) {
-        parser_error(parser, "Out of memory (allocation of arguemnts)");
-        return node;
-      }
-      memcpy(buf, node->u.simple.args, n_args * sizeof(char *));
-      buf[n_args]           = parser->prev->lexeme;
-      node->u.simple.args   = buf;
-      node->u.simple.n_args = capacity;
-    }
-  } else if (node->u.simple.n_assigns > 0) {
-    return node;
-  } else {
+  if (node->u.simple.assigns.length == 0 && node->u.simple.args.length == 0) {
     parser_error(parser, "Expected command name or assignment");
     return node;
   }
 
-  token_type_t op = parser->cur->type;
-
-  while (op == TOK_LESS || op == TOK_GREAT || op == TOK_D_LESS ||
-         op == TOK_D_GREAT || op == TOK_LESS_AND || op == TOK_GREAT_AND ||
-         op == TOK_LESS_GREAT || op == TOK_CLOBBER || op == TOK_IO_NUMBER) {
+  while (parser->cur && is_redir_tok(parser->cur->type)) {
+    token_type_t op = parser->cur->type;
     advance(parser);
+
     int          fd;
     token_type_t redir_op;
     if (op == TOK_IO_NUMBER) {
@@ -268,8 +257,8 @@ static ast_node_t *parse_simple(parser_t *parser) {
         case TOK_D_LESS:
         case TOK_LESS_AND:
         case TOK_LESS_GREAT:
-        case TOK_D_LESS_DASH: fd = 1;
-        default: fd = 0;
+        case TOK_D_LESS_DASH: fd = 1; break;
+        default: fd = 0; break;
       }
       redir_op = op;
     }
@@ -279,27 +268,30 @@ static ast_node_t *parse_simple(parser_t *parser) {
 
     if (!target_tok) break;
 
-    ast_redir_t redir;
-    redir.type   = map_token_to_redir_type(redir_op);
-    redir.fd     = fd;
-    redir.target = target_tok->lexeme;
-
-    size_t       n_redirs = node->u.simple.n_redirs;
-    size_t       capacity = n_redirs + 1;
-    ast_redir_t *buf =
-        arena_alloc(parser->arena, capacity * sizeof(ast_redir_t));
-    if (!buf) {
-      parser_error(parser, "Out of memory (allocation of redirections)");
-      return node;
-    }
-    if (node->u.simple.redirs)
-      memcpy(buf, node->u.simple.redirs, n_redirs * sizeof(ast_redir_t));
-    buf[n_redirs]           = redir;
-    node->u.simple.redirs   = buf;
-    node->u.simple.n_redirs = capacity;
+    ast_redir_t redir = {
+        .type   = map_token_to_redir_type(redir_op),
+        .fd     = fd,
+        .target = target_tok->lexeme,
+    };
+    vector_push(&node->u.simple.redirs, &redir);
   }
 
   return node;
+}
+
+static bool is_redir_tok(token_type_t t) {
+  switch (t) {
+    case TOK_LESS:
+    case TOK_GREAT:
+    case TOK_D_LESS:
+    case TOK_D_GREAT:
+    case TOK_LESS_AND:
+    case TOK_GREAT_AND:
+    case TOK_LESS_GREAT:
+    case TOK_D_LESS_DASH:
+    case TOK_CLOBBER: return true;
+    default: return false;
+  }
 }
 
 static ast_redir_type_t map_token_to_redir_type(token_type_t op) {

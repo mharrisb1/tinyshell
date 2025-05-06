@@ -2,6 +2,9 @@
 #define AST_H
 
 #include <stddef.h>
+
+#include "collections/vector.h"
+
 typedef enum {
   AST_SIMPLE,     // a bare command (with assignments, argv[], redirs[])
   AST_PIPELINE,   // cmd1 | cmd2 | ... (vector of AST_SIMPLE or AST_SUBSHELL)
@@ -12,7 +15,6 @@ typedef enum {
   AST_SUBSHELL    // ( list )
 } ast_type_t;
 
-/* var=val */
 typedef struct {
   char *name;
   char *value;
@@ -43,18 +45,14 @@ struct ast_node_t {
   union {
     // AST_SIMPLE
     struct {
-      ast_assignment_t *assigns;
-      size_t            n_assigns;
-      char            **args;
-      size_t            n_args;
-      ast_redir_t      *redirs;
-      size_t            n_redirs;
+      vector_t assigns;
+      vector_t args;
+      vector_t redirs;
     } simple;
 
     // AST_PIPELINE
     struct {
-      ast_node_t **stages;
-      size_t       n_stages;
+      vector_t stages;
     } pipeline;
 
     // AST_SEQUENCE, AST_AND, AST_OR
