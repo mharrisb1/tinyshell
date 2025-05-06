@@ -168,7 +168,7 @@ static ast_node_t *parse_pipeline(parser_t *parser) {
 
   do {
     ast_node_t *next_stage = parse_command(parser);
-    vector_push(&stages, next_stage);
+    vector_push(&stages, &next_stage);
   } while (match(parser, TOK_PIPE));
 
   ast_node_t *pipe_node = arena_alloc(parser->arena, sizeof(ast_node_t));
