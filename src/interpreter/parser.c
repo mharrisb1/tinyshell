@@ -100,7 +100,20 @@ static token_t *consume(parser_t *parser, token_type_t want,
 static ast_node_t *parse_list(parser_t *parser) {
   ast_node_t *left = parse_and_or(parser);
 
-  while (match(parser, TOK_SEMI) || match(parser, TOK_NEWLINE)) {
+  while (match(parser, TOK_SEMI) || match(parser, TOK_NEWLINE) ||
+         match(parser, TOK_AMP)) {
+    token_type_t sep = parser->prev->type;
+    if (sep == TOK_AMP) {
+      ast_node_t *bg = arena_alloc(parser->arena, sizeof(ast_node_t));
+      if (!bg) {
+        parser_error(parser, "Out of memory (parse_list)");
+        return NULL;
+      }
+      bg->type               = AST_BACKGROUND;
+      bg->u.background.child = left;
+      left                   = bg;
+    }
+
     ast_node_t *right = parse_and_or(parser);
 
     ast_node_t *seq = arena_alloc(parser->arena, sizeof(ast_node_t));
