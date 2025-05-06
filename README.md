@@ -49,6 +49,7 @@ flowchart TD
             partyline
         end
         subgraph interpreter
+            ast
             scanner
             parser
         end
