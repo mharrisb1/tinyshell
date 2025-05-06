@@ -289,6 +289,7 @@ static bool is_redir_tok(token_type_t t) {
     case TOK_GREAT_AND:
     case TOK_LESS_GREAT:
     case TOK_D_LESS_DASH:
+    case TOK_IO_NUMBER:
     case TOK_CLOBBER: return true;
     default: return false;
   }
