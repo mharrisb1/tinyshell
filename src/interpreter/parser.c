@@ -177,11 +177,11 @@ static ast_node_t *parse_pipeline(parser_t *parser) {
 
   vector_t stages;
   vector_init(&stages, sizeof(ast_node_t *), parser->arena);
-  vector_push(&stages, &first);
+  vector_push(&stages, first);
 
   do {
     ast_node_t *next_stage = parse_command(parser);
-    vector_push(&stages, &next_stage);
+    vector_push(&stages, next_stage);
   } while (match(parser, TOK_PIPE));
 
   ast_node_t *pipe_node = arena_alloc(parser->arena, sizeof(ast_node_t));
@@ -247,7 +247,7 @@ static ast_node_t *parse_simple(parser_t *parser) {
   }
 
   while (match(parser, TOK_WORD))
-    vector_push(&node->u.simple.args, &parser->prev->lexeme);
+    vector_push(&node->u.simple.args, parser->prev->lexeme);
 
   if (node->u.simple.assigns.length == 0 && node->u.simple.args.length == 0) {
     parser_error(parser, "Expected command name or assignment");
@@ -270,8 +270,8 @@ static ast_node_t *parse_simple(parser_t *parser) {
         case TOK_D_LESS:
         case TOK_LESS_AND:
         case TOK_LESS_GREAT:
-        case TOK_D_LESS_DASH: fd = 1; break;
-        default: fd = 0; break;
+        case TOK_D_LESS_DASH: fd = 0; break;
+        default: fd = 1; break;
       }
       redir_op = op;
     }
