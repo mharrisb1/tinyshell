@@ -39,4 +39,9 @@ static inline void vector_push(vector_t *vec, const void *elem) {
   memcpy((char *)vec->data + vec->length * vec->elem_size, elem, vec->elem_size);
   vec->length++;
 }
+
+static inline void *vector_get(vector_t *vec, size_t index) {
+  if (index >= vec->length) return NULL;
+  return (char *)vec->data + index * vec->elem_size;
+}
 #endif // VECTOR_H
